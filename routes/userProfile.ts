@@ -53,31 +53,24 @@ export function getUserProfile () {
 
     if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
       req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
+      const match = username?.match(/^#{(.*)}$/)
       try {
-        if (!code) {
-          throw new Error('Username is null')
+        if (!match) {
+          throw new Error('Username is not a single interpolation expression')
         }
-        const singleQuoteRegex = /^'(?:[^'\\]|\\.)*'$/
-        const doubleQuoteRegex = /^"(?:[^"\\]|\\.)*"$/
-        const backtickRegex = /^`(?:[^`\\$]|\\.|\$(?!{))*`$/
-        const numericRegex = /^-?\d+(?:\.\d+)?$/
-        const booleanRegex = /^(?:true|false|null|undefined)$/
-
-        const isSafe = singleQuoteRegex.test(code) ||
-          doubleQuoteRegex.test(code) ||
-          backtickRegex.test(code) ||
-          numericRegex.test(code) ||
-          booleanRegex.test(code)
-
-        if (!isSafe) {
+        const code = match[1]
+        const isArithmetic = /^[\d\s+\-*/%().]+$/.test(code)
+        if (!isArithmetic) {
           throw new Error('Unsafe code execution blocked')
         }
-        username = eval(code) // eslint-disable-line no-eval
+        username = String(eval(code)) // eslint-disable-line no-eval
       } catch (err) {
-        username = '\\' + username
+        username = username?.replace(/#{/g, '\\#{')
+        if (username && !username.startsWith('\\')) {
+          username = '\\' + username
+        }
       }
-    } else {
+    } else if (username) {
       username = '\\' + username
     }
 
